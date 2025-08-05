@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  clockify-processor:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=false
+      - LOG_LEVEL=info
+    volumes:
+      # Mount uploads and exports for persistence
+      - ./uploads:/app/uploads
+      - ./exports:/app/exports
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development service with hot reload
+  clockify-processor-dev:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=true
+      - LOG_LEVEL=debug
+    volumes:
+      # Mount source code for development
+      - ./app:/app/app
+      - ./static:/app/static
+      - ./uploads:/app/uploads
+      - ./exports:/app/exports
+    profiles:
+      - dev
+    restart: unless-stopped

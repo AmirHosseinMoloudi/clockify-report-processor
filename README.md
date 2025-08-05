@@ -1,7 +1,7 @@
 # Clockify Report Processor
 
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
-[![PyQt5](https://img.shields.io/badge/PyQt5-5.15.9-green)](https://pypi.org/project/PyQt5/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-green)](https://fastapi.tiangolo.com/)
 [![Pandas](https://img.shields.io/badge/pandas-2.0.0-yellow)](https://pandas.pydata.org/)
 [![openpyxl](https://img.shields.io/badge/openpyxl-3.1.2-orange)](https://openpyxl.readthedocs.io/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -11,8 +11,9 @@
 - [Overview](#overview)
 - [Features](#features)
 - [Technical Architecture](#technical-architecture)
-- [Installation](#installation)
+- [Installation & Deployment](#installation--deployment)
 - [Usage Guide](#usage-guide)
+- [API Documentation](#api-documentation)
 - [Data Processing Workflow](#data-processing-workflow)
 - [File Formats](#file-formats)
 - [Development](#development)
@@ -21,7 +22,7 @@
 
 ## 🔍 Overview
 
-Clockify Report Processor is a powerful desktop application designed to transform raw Clockify time tracking exports into structured, business-ready reports. The application provides a modern, responsive user interface built with PyQt5 and leverages pandas for efficient data processing.
+Clockify Report Processor is a modern web application designed to transform raw Clockify time tracking exports into structured, business-ready reports. The application provides a responsive, mobile-friendly interface built with FastAPI and leverages pandas for efficient data processing.
 
 ![Clockify Report Processor Screenshot](screenshot.jpg)
 
@@ -279,6 +280,60 @@ Total: | | 40:00:00
 The HR format provides a simplified view with projects and their descriptions aggregated with calculated time totals.
 
 ## 💻 Development
+
+### Local Development
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+python run.py
+```
+
+### Using Docker Compose
+```bash
+# Development mode with hot reload
+docker-compose up clockify-processor-dev
+
+# Production mode
+docker-compose up clockify-processor
+```
+
+## Change Log
+
+### 2025-01-08 18:15 UTC - File Name Display Responsiveness Enhancement
+- **UI IMPROVEMENT**: Enhanced file name display responsiveness in web application
+- **Files Modified**: `static/index.html`
+- **Changes Made**:
+  - Added responsive CSS styling for file name display with word wrapping and text breaking
+  - Implemented mobile-specific styles for different screen sizes (768px, 480px, 320px)
+  - Enhanced file stats grid layout with responsive breakpoints
+  - Added tooltip functionality for long filenames (>25 characters)
+  - Improved visual feedback with cursor changes for truncated filenames
+- **Technical Details**:
+  - File name now uses `word-break: break-all` and `overflow-wrap: break-word` for proper text wrapping
+  - Maximum width constraints prevent overflow on small screens
+  - Grid layout adapts from multi-column to single-column on mobile devices
+  - JavaScript enhancement provides full filename in tooltip when truncated
+- **Result**: File name display is now fully responsive across all device sizes with proper text handling
+
+### 2025-01-08 17:43 UTC - FastAPI Migration Complete
+- **MAJOR ARCHITECTURE CHANGE**: Converted entire project from PyQt5 desktop application to FastAPI web application
+- **Frontend**: Implemented responsive, mobile-friendly web UI using vanilla HTML/CSS/JavaScript
+- **Backend**: Complete FastAPI implementation with all original functionality preserved
+- **Files Modified/Created**:
+  - `app/main.py` - New FastAPI backend with all core functionality
+  - `static/index.html` - New responsive web frontend
+  - `run.py` - Application startup script
+  - `requirements.txt` - Updated dependencies (FastAPI, uvicorn, python-multipart)
+  - `README.md` - Updated documentation for web application
+  - `Dockerfile` - Added containerization support
+  - `docker-compose.yml` - Added development and production configurations
+  - `.gitignore` - Updated with comprehensive exclusions
+- **Features Preserved**: All original functionality maintained (import, preview, export projects/HR)
+- **New Features**: Web-based interface, mobile responsiveness, containerization, API endpoints
+- **Deployment Ready**: Out-of-the-box deployment with Docker or manual installation
+- **Testing Status**: Application verified running successfully on http://127.0.0.1:8000
 
 ### Project Structure
 
