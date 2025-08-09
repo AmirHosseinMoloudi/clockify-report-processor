@@ -18,14 +18,15 @@ sys.path.insert(0, str(app_dir))
 def main():
     """Main entry point for the application."""
     
-    # Configuration
-    host = os.getenv("HOST", "127.0.0.1")
-    port = int(os.getenv("PORT", "8000"))
-    reload = os.getenv("RELOAD", "true").lower() == "true"
+    # Configuration - Updated for production deployment
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "8002"))
+    reload = os.getenv("RELOAD", "false").lower() == "true"  # Default to false for production
     log_level = os.getenv("LOG_LEVEL", "info")
     
     print(f"Starting Clockify Report Processor...")
     print(f"Server will be available at: http://{host}:{port}")
+    print(f"Frontend accessible via: https://sub.domain.com/clockify/report/api")
     print(f"Reload mode: {reload}")
     print(f"Log level: {log_level}")
     print("-" * 50)

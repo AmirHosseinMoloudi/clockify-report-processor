@@ -11,25 +11,32 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-# Configure structured logging
+# Configure structured logging with enhanced format
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
     handlers=[
-        logging.FileHandler('clockify_processor.log'),
+        logging.FileHandler('clockify_processor.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app
+# Log application startup
+logger.info("Initializing Clockify Report Processor v2.0.0")
+
+# Initialize FastAPI app with nginx proxy configuration
 app = FastAPI(
     title="Clockify Report Processor",
     description="Convert Clockify time reports into structured business reports",
     version="2.0.0",
     docs_url="/api/docs",
-    redoc_url="/api/redoc"
+    redoc_url="/api/redoc",
+    root_path="/clockify/report"  # Handle nginx proxy path
 )
+
+# Log FastAPI initialization
+logger.info("FastAPI application initialized with root_path='/clockify/report'")
 
 # Configure CORS for frontend access
 app.add_middleware(
@@ -75,47 +82,87 @@ async def read_root():
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """Upload and process Clockify Excel report"""
+    """Upload and process Clockify Excel report with enhanced error handling"""
+    start_time = datetime.now()
+    logger.info(f"Upload request initiated - File: {file.filename}, Content-Type: {file.content_type}")
+    
     try:
-        logger.info(f"Processing upload: {file.filename}")
-        
-        # Validate file type
+        # Enhanced file validation
+        if not file.filename:
+            logger.warning("Upload attempt with no filename")
+            raise HTTPException(status_code=400, detail="No file provided")
+            
         if not file.filename.lower().endswith(('.xlsx', '.xls')):
+            logger.warning(f"Invalid file type uploaded: {file.filename}")
             raise HTTPException(status_code=400, detail="Only Excel files (.xlsx, .xls) are supported")
         
-        # Save uploaded file
-        file_path = f"uploads/{file.filename}"
+        # Check file size (limit to 50MB)
+        content = await file.read()
+        file_size_mb = len(content) / (1024 * 1024)
+        if file_size_mb > 50:
+            logger.warning(f"File too large: {file_size_mb:.2f}MB - {file.filename}")
+            raise HTTPException(status_code=413, detail="File too large. Maximum size is 50MB")
+        
+        logger.info(f"File validation passed - Size: {file_size_mb:.2f}MB")
+        
+        # Save uploaded file with timestamp to avoid conflicts
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_filename = f"{timestamp}_{file.filename}"
+        file_path = f"uploads/{safe_filename}"
+        
         with open(file_path, "wb") as buffer:
-            content = await file.read()
             buffer.write(content)
         
-        # Load and validate Excel file
+        logger.info(f"File saved successfully: {file_path}")
+        
+        # Load and validate Excel file with enhanced error handling
         try:
             df = pd.read_excel(file_path)
+            
             if df.empty:
+                logger.error(f"Empty Excel file: {file.filename}")
                 raise HTTPException(status_code=400, detail="Excel file is empty")
+            
+            # Validate required columns exist
+            required_columns = ['Project', 'User', 'Description']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                logger.warning(f"Missing required columns: {missing_columns} in {file.filename}")
+                # Don't fail, just log warning as column names may vary
             
             # Store data globally (in production, use session management)
             data_store['current_data'] = df
             data_store['filename'] = file.filename
+            data_store['upload_time'] = start_time
+            data_store['file_path'] = file_path
             
-            logger.info(f"Successfully loaded {len(df)} records from {file.filename}")
+            processing_time = (datetime.now() - start_time).total_seconds()
+            logger.info(f"Successfully processed {len(df)} records from {file.filename} in {processing_time:.2f}s")
             
             return {
                 "message": "File uploaded successfully",
                 "filename": file.filename,
                 "records": len(df),
-                "columns": list(df.columns)
+                "columns": list(df.columns),
+                "processing_time_seconds": round(processing_time, 2),
+                "file_size_mb": round(file_size_mb, 2)
             }
             
+        except pd.errors.EmptyDataError:
+            logger.error(f"Empty data in Excel file: {file.filename}")
+            raise HTTPException(status_code=400, detail="Excel file contains no data")
+        except pd.errors.ParserError as e:
+            logger.error(f"Parser error reading Excel file {file.filename}: {str(e)}")
+            raise HTTPException(status_code=400, detail=f"Invalid Excel file format: {str(e)}")
         except Exception as e:
-            logger.error(f"Error reading Excel file: {str(e)}")
+            logger.error(f"Error reading Excel file {file.filename}: {str(e)}\n{traceback.format_exc()}")
             raise HTTPException(status_code=400, detail=f"Invalid Excel file: {str(e)}")
             
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error in upload: {str(e)}\n{traceback.format_exc()}")
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.error(f"Unexpected error in upload after {processing_time:.2f}s: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Internal server error during upload")
 
 @app.get("/api/preview", response_model=DataPreview)
@@ -151,52 +198,106 @@ async def get_data_preview():
 
 @app.post("/api/export")
 async def export_data(request: ExportRequest):
-    """Export data in specified format"""
+    """Export data in specified format with enhanced error handling"""
+    start_time = datetime.now()
+    export_type = request.export_type.lower() if request.export_type else "unknown"
+    logger.info(f"Export request initiated - Type: {export_type}, Custom filename: {request.filename}")
+    
     try:
+        # Validate data availability
         if 'current_data' not in data_store:
-            raise HTTPException(status_code=404, detail="No data uploaded")
+            logger.warning("Export attempted without uploaded data")
+            raise HTTPException(status_code=404, detail="No data uploaded. Please upload a file first.")
         
         df = data_store['current_data'].copy()
-        export_type = request.export_type.lower()
+        original_filename = data_store.get('filename', 'unknown')
+        record_count = len(df)
         
-        if export_type == "projects":
-            file_path = await export_projects_report(df, request.filename)
-        elif export_type == "hr":
-            file_path = await export_hr_report(df, request.filename)
-        else:
-            raise HTTPException(status_code=400, detail="Invalid export type. Use 'projects' or 'hr'")
+        logger.info(f"Starting {export_type} export for {record_count} records from {original_filename}")
         
-        logger.info(f"Successfully exported {export_type} report to {file_path}")
+        # Validate export type
+        valid_types = ["projects", "hr"]
+        if export_type not in valid_types:
+            logger.warning(f"Invalid export type requested: {export_type}")
+            raise HTTPException(status_code=400, detail=f"Invalid export type '{export_type}'. Use 'projects' or 'hr'")
         
-        return {
-            "message": f"{export_type.title()} report generated successfully",
-            "download_url": f"/api/download/{os.path.basename(file_path)}"
-        }
+        # Generate export based on type
+        try:
+            if export_type == "projects":
+                file_path = await export_projects_report(df, request.filename)
+            elif export_type == "hr":
+                file_path = await export_hr_report(df, request.filename)
+            
+            # Verify file was created successfully
+            if not os.path.exists(file_path):
+                logger.error(f"Export file was not created: {file_path}")
+                raise HTTPException(status_code=500, detail="Export file generation failed")
+            
+            file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+            processing_time = (datetime.now() - start_time).total_seconds()
+            
+            logger.info(f"Successfully exported {export_type} report: {file_path} ({file_size_mb:.2f}MB) in {processing_time:.2f}s")
+            
+            return {
+                "message": f"{export_type.title()} report generated successfully",
+                "download_url": f"/api/download/{os.path.basename(file_path)}",
+                "filename": os.path.basename(file_path),
+                "file_size_mb": round(file_size_mb, 2),
+                "processing_time_seconds": round(processing_time, 2),
+                "record_count": record_count
+            }
+            
+        except Exception as export_error:
+            logger.error(f"Error during {export_type} export generation: {str(export_error)}\n{traceback.format_exc()}")
+            raise HTTPException(status_code=500, detail=f"Error generating {export_type} report: {str(export_error)}")
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error during export: {str(e)}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail="Error generating export")
+        processing_time = (datetime.now() - start_time).total_seconds()
+        logger.error(f"Unexpected error during {export_type} export after {processing_time:.2f}s: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Internal server error during export")
 
 @app.get("/api/download/{filename}")
 async def download_file(filename: str):
-    """Download exported file"""
+    """Download exported file with enhanced security and logging"""
+    logger.info(f"Download request for file: {filename}")
+    
     try:
-        file_path = f"exports/{filename}"
+        # Sanitize filename to prevent directory traversal
+        safe_filename = os.path.basename(filename)
+        if safe_filename != filename:
+            logger.warning(f"Potential directory traversal attempt: {filename}")
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        
+        file_path = f"exports/{safe_filename}"
+        
+        # Check if file exists
         if not os.path.exists(file_path):
+            logger.warning(f"Requested file not found: {file_path}")
             raise HTTPException(status_code=404, detail="File not found")
+        
+        # Check file age (delete files older than 24 hours)
+        file_age_hours = (datetime.now().timestamp() - os.path.getmtime(file_path)) / 3600
+        if file_age_hours > 24:
+            logger.info(f"Removing expired file: {file_path} (age: {file_age_hours:.1f}h)")
+            os.remove(file_path)
+            raise HTTPException(status_code=404, detail="File has expired and been removed")
+        
+        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+        logger.info(f"Serving download: {safe_filename} ({file_size_mb:.2f}MB)")
         
         return FileResponse(
             path=file_path,
-            filename=filename,
-            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            filename=safe_filename,
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
         )
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error downloading file: {str(e)}")
+        logger.error(f"Error downloading file {filename}: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Error downloading file")
 
 async def export_projects_report(df: pd.DataFrame, custom_filename: Optional[str] = None) -> str:
@@ -420,6 +521,84 @@ def sanitize_sheet_name(name):
     """Sanitize sheet name for Excel compatibility"""
     return str(name)[:31].replace('/', '_').replace('\\', '_').replace('?', '_').replace('*', '_').replace('[', '_').replace(']', '_').replace(':', '_')
 
+# Health check endpoint for monitoring
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for monitoring and load balancers"""
+    try:
+        # Check if directories exist
+        uploads_exists = os.path.exists("uploads")
+        exports_exists = os.path.exists("exports")
+        
+        # Check current data store status
+        has_data = 'current_data' in data_store
+        data_records = len(data_store.get('current_data', [])) if has_data else 0
+        
+        uptime_seconds = (datetime.now() - datetime.now()).total_seconds()  # This will be updated by startup event
+        
+        health_status = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "version": "2.0.0",
+            "directories": {
+                "uploads": uploads_exists,
+                "exports": exports_exists
+            },
+            "data_store": {
+                "has_data": has_data,
+                "records": data_records
+            },
+            "uptime_seconds": uptime_seconds
+        }
+        
+        logger.debug(f"Health check completed: {health_status}")
+        return health_status
+        
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        raise HTTPException(status_code=503, detail="Service unhealthy")
+
+# Application startup event
+@app.on_event("startup")
+async def startup_event():
+    """Initialize application on startup"""
+    logger.info("Application startup initiated")
+    
+    # Ensure required directories exist
+    os.makedirs("uploads", exist_ok=True)
+    os.makedirs("exports", exist_ok=True)
+    
+    # Clean up old files on startup
+    cleanup_old_files()
+    
+    logger.info("Application startup completed successfully")
+
+def cleanup_old_files():
+    """Clean up files older than 24 hours"""
+    try:
+        current_time = datetime.now().timestamp()
+        cleaned_count = 0
+        
+        for directory in ["uploads", "exports"]:
+            if os.path.exists(directory):
+                for filename in os.listdir(directory):
+                    file_path = os.path.join(directory, filename)
+                    if os.path.isfile(file_path):
+                        file_age_hours = (current_time - os.path.getmtime(file_path)) / 3600
+                        if file_age_hours > 24:
+                            os.remove(file_path)
+                            cleaned_count += 1
+                            logger.info(f"Cleaned up old file: {file_path}")
+        
+        if cleaned_count > 0:
+            logger.info(f"Startup cleanup completed: {cleaned_count} files removed")
+        else:
+            logger.info("Startup cleanup completed: no old files found")
+            
+    except Exception as e:
+        logger.error(f"Error during startup cleanup: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    logger.info("Starting application in direct mode")
+    uvicorn.run(app, host="0.0.0.0", port=8002, log_level="info")

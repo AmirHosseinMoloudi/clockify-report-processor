@@ -6,6 +6,30 @@
 [![openpyxl](https://img.shields.io/badge/openpyxl-3.1.2-orange)](https://openpyxl.readthedocs.io/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+## 📅 Change Log
+
+### 2024-12-19 - Production Deployment Configuration
+
+**Major Updates for Production Deployment:**
+- **Server Configuration**: Modified application to run on `0.0.0.0:8002` for production deployment
+- **Nginx Proxy Support**: Added `root_path="/clockify/report"` configuration for reverse proxy compatibility
+- **Frontend API Updates**: Updated all frontend API calls to use `/clockify/report/api/*` paths
+- **Enhanced Logging**: Implemented structured logging with filename, line numbers, and UTF-8 encoding
+- **Robust Error Handling**: Added comprehensive error handling for all API endpoints with detailed logging
+- **Security Enhancements**: Implemented file validation, size limits (50MB), and path sanitization
+- **Health Check Endpoint**: Added `/api/health` endpoint for monitoring and load balancer health checks
+- **File Management**: Automatic cleanup of files older than 24 hours to prevent disk space issues
+- **Production Optimizations**: Disabled reload mode and configured for production environment
+
+**Frontend Accessibility**: Application now accessible at `https://sub.domain.com/clockify/report/api`
+
+**Technical Improvements:**
+- Enhanced upload endpoint with timestamped file saving and detailed validation
+- Improved export endpoint with metadata response (file size, processing time, record count)
+- Secure download endpoint with directory traversal protection
+- Startup event for directory creation and old file cleanup
+- Comprehensive logging for all operations and error scenarios
+
 ## 📋 Table of Contents
 
 - [Overview](#overview)
