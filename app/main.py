@@ -47,7 +47,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
+# Mount static files at root for nginx proxy compatibility
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Ensure uploads directory exists
@@ -70,6 +70,32 @@ class ExportRequest(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     """Serve the main application page"""
+    try:
+        with open("static/index.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        logger.error("index.html not found in static directory")
+        raise HTTPException(status_code=404, detail="Frontend not found")
+    except Exception as e:
+        logger.error(f"Error serving root page: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/clockify/report/", response_class=HTMLResponse)
+async def read_index_proxy():
+    """Serve the main application page for nginx proxy path"""
+    try:
+        with open("static/index.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        logger.error("index.html not found in static directory")
+        raise HTTPException(status_code=404, detail="Frontend not found")
+    except Exception as e:
+        logger.error(f"Error serving root page: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/clockify/report/api", response_class=HTMLResponse)
+async def read_index_api():
+    """Serve the main application page for API documentation access"""
     try:
         with open("static/index.html", "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
