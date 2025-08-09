@@ -58,7 +58,7 @@ for fastapi_app in [app, api_app]:
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Mount the API sub-application
-app.mount("/clockify/report/api", api_app)
+app.mount("/api", api_app)
 
 # Ensure uploads directory exists
 os.makedirs("uploads", exist_ok=True)

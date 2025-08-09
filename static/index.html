@@ -768,7 +768,7 @@
                 updateProgress(30);
                 showStatus('info', 'Uploading and processing file...');
 
-                const response = await fetch('/clockify/report/api/upload', {
+                const response = await fetch('/api/upload', {
                     method: 'POST',
                     body: formData
                 });
@@ -849,7 +849,7 @@
             try {
                 showPreviewStatus('info', 'Loading data preview...');
 
-                const response = await fetch('/clockify/report/api/preview');
+                const response = await fetch('/api/preview');
                 if (!response.ok) {
                     const error = await response.json();
                     throw new Error(error.detail || 'Failed to load preview');
@@ -970,7 +970,7 @@
             try {
                 showExportStatus('info', `Generating ${type} report...`);
 
-                const response = await fetch('/clockify/report/api/export', {
+                const response = await fetch('/api/export', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1014,7 +1014,7 @@
 
         async function checkDataStatus() {
             try {
-                const response = await fetch('/clockify/report/api/preview');
+                const response = await fetch('/api/preview');
                 if (response.ok) {
                     isDataLoaded = true;
                     const data = await response.json();
