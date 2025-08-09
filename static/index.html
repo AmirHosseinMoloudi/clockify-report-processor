@@ -776,8 +776,20 @@
                 updateProgress(70);
 
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Upload failed');
+                    let errorMessage = 'Upload failed';
+                    try {
+                        const contentType = response.headers.get('content-type');
+                        if (contentType && contentType.includes('application/json')) {
+                            const error = await response.json();
+                            errorMessage = error.detail || errorMessage;
+                        } else {
+                            const errorText = await response.text();
+                            errorMessage = `Server error (${response.status}): ${errorText.substring(0, 100)}`;
+                        }
+                    } catch (parseError) {
+                        errorMessage = `Server error (${response.status}): Unable to parse response`;
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const result = await response.json();
@@ -851,8 +863,20 @@
 
                 const response = await fetch('/api/preview');
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Failed to load preview');
+                    let errorMessage = 'Failed to load preview';
+                    try {
+                        const contentType = response.headers.get('content-type');
+                        if (contentType && contentType.includes('application/json')) {
+                            const error = await response.json();
+                            errorMessage = error.detail || errorMessage;
+                        } else {
+                            const errorText = await response.text();
+                            errorMessage = `Server error (${response.status}): ${errorText.substring(0, 100)}`;
+                        }
+                    } catch (parseError) {
+                        errorMessage = `Server error (${response.status}): Unable to parse response`;
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const data = await response.json();
@@ -981,8 +1005,20 @@
                 });
 
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Export failed');
+                    let errorMessage = 'Export failed';
+                    try {
+                        const contentType = response.headers.get('content-type');
+                        if (contentType && contentType.includes('application/json')) {
+                            const error = await response.json();
+                            errorMessage = error.detail || errorMessage;
+                        } else {
+                            const errorText = await response.text();
+                            errorMessage = `Server error (${response.status}): ${errorText.substring(0, 100)}`;
+                        }
+                    } catch (parseError) {
+                        errorMessage = `Server error (${response.status}): Unable to parse response`;
+                    }
+                    throw new Error(errorMessage);
                 }
 
                 const result = await response.json();
