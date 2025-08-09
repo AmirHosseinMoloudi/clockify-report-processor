@@ -25,30 +25,40 @@ logger = logging.getLogger(__name__)
 # Log application startup
 logger.info("Initializing Clockify Report Processor v2.0.0")
 
-# Initialize FastAPI app with nginx proxy configuration
+# Initialize FastAPI app - main app without root_path since nginx forwards full path
 app = FastAPI(
     title="Clockify Report Processor",
     description="Convert Clockify time reports into structured business reports",
+    version="2.0.0"
+)
+
+# Create sub-application for the API with proper path handling
+api_app = FastAPI(
+    title="Clockify Report Processor API",
+    description="Convert Clockify time reports into structured business reports",
     version="2.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    root_path="/clockify/report"  # Handle nginx proxy path
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # Log FastAPI initialization
-logger.info("FastAPI application initialized with root_path='/clockify/report'")
+logger.info("FastAPI application initialized with sub-application for API handling")
 
-# Configure CORS for frontend access
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, specify exact origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure CORS for both main app and API sub-app
+for fastapi_app in [app, api_app]:
+    fastapi_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # In production, specify exact origins
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Mount static files at root for nginx proxy compatibility
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Mount the API sub-application
+app.mount("/clockify/report/api", api_app)
 
 # Ensure uploads directory exists
 os.makedirs("uploads", exist_ok=True)
@@ -106,7 +116,7 @@ async def read_index_api():
         logger.error(f"Error serving root page: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.post("/api/upload")
+@api_app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     """Upload and process Clockify Excel report with enhanced error handling"""
     start_time = datetime.now()
@@ -191,7 +201,7 @@ async def upload_file(file: UploadFile = File(...)):
         logger.error(f"Unexpected error in upload after {processing_time:.2f}s: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Internal server error during upload")
 
-@app.get("/api/preview", response_model=DataPreview)
+@api_app.get("/preview", response_model=DataPreview)
 async def get_data_preview():
     """Get preview of uploaded data"""
     try:
@@ -222,7 +232,7 @@ async def get_data_preview():
         logger.error(f"Error generating preview: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Error generating data preview")
 
-@app.post("/api/export")
+@api_app.post("/export")
 async def export_data(request: ExportRequest):
     """Export data in specified format with enhanced error handling"""
     start_time = datetime.now()
@@ -284,7 +294,7 @@ async def export_data(request: ExportRequest):
         logger.error(f"Unexpected error during {export_type} export after {processing_time:.2f}s: {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail="Internal server error during export")
 
-@app.get("/api/download/{filename}")
+@api_app.get("/download/{filename}")
 async def download_file(filename: str):
     """Download exported file with enhanced security and logging"""
     logger.info(f"Download request for file: {filename}")
@@ -548,7 +558,7 @@ def sanitize_sheet_name(name):
     return str(name)[:31].replace('/', '_').replace('\\', '_').replace('?', '_').replace('*', '_').replace('[', '_').replace(']', '_').replace(':', '_')
 
 # Health check endpoint for monitoring
-@app.get("/api/health")
+@api_app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring and load balancers"""
     try:
@@ -585,7 +595,7 @@ async def health_check():
         raise HTTPException(status_code=503, detail="Service unhealthy")
 
 # Application startup event
-@app.on_event("startup")
+@api_app.on_event("startup")
 async def startup_event():
     """Initialize application on startup"""
     logger.info("Application startup initiated")
