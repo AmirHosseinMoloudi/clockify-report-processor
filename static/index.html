@@ -770,7 +770,11 @@
 
                 const response = await fetch('/api/upload', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
                 });
 
                 updateProgress(70);
@@ -861,7 +865,12 @@
             try {
                 showPreviewStatus('info', 'Loading data preview...');
 
-                const response = await fetch('/api/preview');
+                const response = await fetch('/api/preview', {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
                 if (!response.ok) {
                     let errorMessage = 'Failed to load preview';
                     try {
@@ -996,8 +1005,10 @@
 
                 const response = await fetch('/api/export', {
                     method: 'POST',
+                    credentials: 'same-origin',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
                     },
                     body: JSON.stringify({
                         export_type: type
